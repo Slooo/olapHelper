@@ -1,6 +1,6 @@
 # olapHelper for Codeigniter olap
 
-[Developer - Robert Slooo] (http://codbro.com)
+[Developer - Robert Slooo](http://codbro.com)
 
 ## Description
 This helper to work with Codeigniter for [ci_olap](https://github.com/mikifus/ci_olap)
