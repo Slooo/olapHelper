@@ -1,12 +1,12 @@
 <?php if ( ! defined('BASEPATH')) exit('No direct script access allowed');
 /**
- * Codeigniter olapHelper
  *
- * @category   Codeigniter olapHelper
- * @package    olapHelper
- * @author     Robert Slooo <codbro.com>
- * @version    1.0
- * @copyright  2016 Robert S
+ * Хелпер для работы с olap
+ *
+ * @author     Robert Slooo
+ * @mail       borisworking@gmail.com
+ * @copyright LTD "EMSIS"
+ * @date 2017
  */
 
 class olapParser {
@@ -17,11 +17,11 @@ class olapParser {
 
     function __construct($result = array())
     {
-       $this->result = $result;
+       $this->result = (array)$result;
        sort($this->result);
     }
 
-    // count rows
+    // количество строк
     public function getRowsCount()
     {
         $axis = $this->hereColumn();
@@ -29,7 +29,7 @@ class olapParser {
         return $rows;
     }
 
-    // check column
+    // проверка столбца
     protected function checkColumn($column)
     {
         $columns = $this->getColumns();
@@ -41,7 +41,7 @@ class olapParser {
         }
     }
 
-    // get here column
+    // определяем откуда брать индексные столбцы
     private function hereColumn()
     {
         $result = $this->result;
@@ -50,32 +50,56 @@ class olapParser {
         if(array_key_exists('Axis0', $result[1]))
         {
             unset($result[0], $result[1], $result[2]['SlicerAxis']);
-            $axis['indexColumn'] = $result[2]['Axis1'];
-            $axis['nameColumn'] = $result[2]['Axis0'];
-            $axis['nameColumnValue'] = $result[3];
+            $axis['Temp_indexColumn'] = $result[2]['Axis1'];
+            $axis['Temp_nameColumn'] = $result[2]['Axis0'];
+            $axis['Temp_nameColumnValue'] = $result[3];
         } else {
             unset($result[0], $result[2], $result[3]['SlicerAxis']);
-            $axis['indexColumn'] = $result[3]['Axis1'][0];
-            $axis['nameColumn'] = $result[3]['Axis0'];
-            $axis['nameColumnValue'] = $result[1];
+            $axis['Temp_indexColumn'] = $result[3]['Axis1'];
+            $axis['Temp_nameColumn'] = $result[3]['Axis0'];
+            $axis['Temp_nameColumnValue'] = $result[1];
         }
+
+        if(!is_array($axis['Temp_nameColumn'][0]))
+        {
+            $x = $axis['Temp_nameColumn'][0];
+            $axis['nameColumn'] = array(0 => array(0 => array_pad(array(), 5, $x)));
+            $axis['nameColumnValue'] = array(0 => array(0 => array_pad(array(), 3, 0)));
+        } else {
+            $axis['nameColumn'] = $axis['Temp_nameColumn'];
+            $axis['nameColumnValue'] = $axis['Temp_nameColumnValue'];
+        }
+
+        if(!is_array($axis['Temp_indexColumn'][0]))
+        {
+            foreach($axis['Temp_indexColumn'] as $k => $v)
+            {
+                $axis['indexColumn'][$k] = array(0 => array_pad(array(), 5, 0));                
+            }
+        } else {
+            $axis['indexColumn'] = $axis['Temp_indexColumn'];
+        }
+
+        unset($axis['Temp_nameColumn']);
+        unset($axis['Temp_nameColumnValue']);
+        unset($axis['Temp_indexColumn']);
 
         return $axis;
     }
 
-	// count index column
+	// количество неименованных столбцов
     public function getColumnsIndexCount()
     {
         return count($this->getColumnsIndex());
     }
 
-    // count name column
+    // количество именованных столбцов
     public function getColumnsNameCount()
     {
         return count($this->getColumnsName());
     }
 
-    // index column
+    // неименованные столбцы
     public function getColumnsIndex()
     {
         $axis = $this->hereColumn();
@@ -86,7 +110,7 @@ class olapParser {
             foreach($axis['indexColumn'][0] as $k => $v)
             {
                 $temp[] = $k;
-            }                       
+            }
         } else {
             foreach($axis['indexColumn'] as $k => $v)
             {
@@ -97,7 +121,7 @@ class olapParser {
 		return $temp;
     }
 
-    // name column
+    // наименование столбцов
     public function getColumnsName()
     {
         $axis = $this->hereColumn();
@@ -106,27 +130,28 @@ class olapParser {
         foreach($axis['nameColumn'] as $k => $v)
         {
             $x = (array)$v[0];
-            $temp[$k] = array_values($x)[1];
+            $y = array_values($x);
+            $temp[$k] = $y[1];
         }
 
         return $temp;
     }
 
-    // all columns
+    // все столбцы
     public function getColumns()
     {
     	$temp = array_merge($this->getColumnsIndex(), $this->getColumnsName());
     	return $temp;
     }
 
-    // count all column
+    // количество всех столбцов
     public function getColumnsCount()
     {
         $count = $this->getColumnsIndexCount() + $this->getColumnsNameCount();
         return $count;
     }
 
-    // data column
+    // данные по столбцу
     public function getDataColumn($column)
     {
         $this->checkColumn($column);
@@ -135,11 +160,11 @@ class olapParser {
         $data = array();
         $result = $this->hereColumn();
 
-        // name column
+        // если столбец именованный
     	if(is_int($column) == false) 
     	{
-            /* if name column == 0,
-                get all rows count name columns
+            /* если количество именованных столбцов 0,
+                то выбираем количество всех строк 
             */
             $count = $this->getColumnsNameCount();
             if($count == 0)
@@ -147,16 +172,21 @@ class olapParser {
                 $count = $this->getRowsCount();                
             }
 
+            // имена столбцов
+            $columns = $this->getColumnsName();
+
+            // преобразуем внутри массива объекты в массив
             foreach($result['nameColumnValue'] as $k => $v)
             {
                 $x = (array)$v;
-                $data[$k] = array_values($x)[0];
+                $y = array_values($x);
+                $data[$k] = $y[0];
             }
 
+            // дробим массив по строкам
     		$index = array_chunk($data, $count, false);
 
-	        $columns = $this->getColumnsName();
-
+	        // сравниваем наименование столбцов
     		foreach($columns as $k => $row)
     		{
     			if($column == $row)
@@ -165,13 +195,15 @@ class olapParser {
 		    		{
                         $x = $val;
                         $x = array_values($x);
-                        $temp[$column][] = $x[$k];
+                        if(array_key_exists($k, $x)){
+                            $temp[$column][] = $x[$k];
+                        }
 		    		}
     			}
     		}
     	}
         
-        // index column
+        // если столбец по index (не именованный)
         else {
 
             foreach($result['indexColumn'] as $k => $v)
@@ -191,7 +223,7 @@ class olapParser {
                 } else {
                    $x = (array)$v;
                    $x = array_values($x);
-                   $temp[$column][] = $x[1];   
+                   $temp[$column][] = $x[1];
                 }
     	    }
         }
@@ -200,7 +232,7 @@ class olapParser {
     	return $this;
     }
 
-    // data columns
+    // все данные по столбцам
     public function getData($columns = false)
     {
     	$data = array();
@@ -211,11 +243,12 @@ class olapParser {
             $columns = $this->getColumns();
         }
 
-    	foreach($columns as $v)
+    	foreach($columns as $k => $v)
     	{
     		$data[] = $this->getDataColumn($v)->toString();
     	}
 
+        // из многомерного в одномерный
         foreach($data as $k => $v)
         {
             foreach($v as $ke => $va)
@@ -224,11 +257,13 @@ class olapParser {
             }
         }
 
+        // сортировка
         if(count($this->sort) > 0)
         {
             $temp = $this->toSort($temp);            
         }
 
+        // лимит
         if(count($this->limit) > 0)
         {
             $temp = $this->toLimit($temp);            
@@ -245,24 +280,26 @@ class olapHelper extends olapParser {
          parent::__construct($result);
     }
 
-    // parse to int
+    // преобразование в число
     protected function toInt()
     {
         $data = array();
         $temp = $this->dataColumn;
-        $name = array_keys($temp)[0];
+        $y = array_keys($temp);
+        $name = $y[0];
 
         return (is_array($temp))
             ? array($name => array_map('intval', $temp[$name])) 
             : false;
     }
 
-    // parse to float
+    // преобразует в число с плавающей точкой
     protected function toFloat($number)
     {
         $data = array();
         $temp = $this->dataColumn;
-        $name = array_keys($temp)[0];
+        $y = array_keys($temp);
+        $name = $y[0];
 
         $data[$name] = array_map(function($array) use($number){
             $array = strtr($array, array(',' => '.'));
@@ -272,29 +309,31 @@ class olapHelper extends olapParser {
         return $data;
     }
 
-    // parse to round
+    // округляет число
     protected function toRound()
     {
         $data = array();
         $temp = $this->dataColumn;
-        $name = array_keys($temp)[0];
+        $y = array_keys($temp);
+        $name = $y[0];
 
         $data[$name] = array_map('round', $temp[$name]);
         return $data;
     }
 
-    // parse to ceil
+    // округляет дровь в большую сторону
     protected function toCeil()
     {
         $data = array();
         $temp = $this->dataColumn;
-        $name = array_keys($temp)[0];
+        $y = array_keys($temp);
+        $name = $y[0];
 
         $data[$name] = array_map('ceil', $temp[$name]);
         return $data;
     }
 
-    // parse to number
+    // преобразование в число
     public function toNumber($type = false, $number = false)
     {
         $data = array();
@@ -324,14 +363,14 @@ class olapHelper extends olapParser {
         return $data;
     }
 
-    // parse to string
+    // преобразование в строку
     public function toString()
     {
         $temp = $this->dataColumn;
         return $temp;
     }
 
-    // limit
+    // лимит
     protected function toLimit($temp)
     {
         $data = array();
@@ -358,15 +397,20 @@ class olapHelper extends olapParser {
         return $data;
     }
 
-    // sorting
+    // сортировка
     protected function toSort($temp)
     {
+        /* если столбец не указан, но по нему происходит сортировка
+            ...
+        */
+
         $data = array();
 
         $config = $this->config;
         $column = $this->sort['column'];
         $direction = $this->sort['direction'];
 
+        // если массив то float
         if(is_array($config['type']))
         {
             $type = $config['type'][0];
@@ -391,12 +435,15 @@ class olapHelper extends olapParser {
             }
         }
 
-        $toParseKey = array_keys($toParse)[0];
+        $y = array_keys($toParse);
+        $toParseKey = $y[0];
 
+        // сохраняем текущий массив
         $beforeTemp = $temp;
 
         $temp[$toParseKey] = $toParse[$toParseKey];     
 
+        // по убыванию
         if($direction == 'desc')
         {
             arsort($temp[$column]);
@@ -404,17 +451,22 @@ class olapHelper extends olapParser {
 
         else
         
+        // по возрастанию
         if($direction == 'asc')
         {
             asort($temp[$column]);
         }
 
+        // сортируем остальные столбцы
         foreach($temp as $key => $val)
         {
+            # столбец задающий сортировку
             foreach($temp[$column] as $k => $v)
             {
+                # сортируемые массивы
                 foreach($temp[$key] as $ke => $ve)
                 {
+                    # сортировка по ключам
                     if($k == $ke)
                     {
                         $data[$key][$ke] = $ve;
@@ -423,6 +475,7 @@ class olapHelper extends olapParser {
             }
         }
 
+        // если сортируемый столбец не был указан при выводе
         if(!array_key_exists($toParseKey, $beforeTemp))
         {
             unset($data[$toParseKey]);
@@ -431,19 +484,19 @@ class olapHelper extends olapParser {
         return $data;
     }
 
-    // settings
+    // конфигурация
     public function setConfig($column, $type)
     {   
         $this->config = array('column' => $column, 'type' => $type);
     }
 
-    // settings to sort
+    // параметры сортировки
     public function setSort($column, $direction)
     {
         $this->sort = array('column' => $column, 'direction' => $direction);
     }
 
-    // settings limit
+    // параметры лимита (offset, limit);
     public function setLimit($array = false)
     {
         $this->limit = $array;
