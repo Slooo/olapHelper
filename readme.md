@@ -19,22 +19,9 @@ Array **$olap** result ci_olap
 $olapHelper = new olapHelper($olap);
 ```
 
-### Settings
-```php
-$olapHelper->setConfig('column', 'string|int|array(float, 2)|round|ceil');
-$olapHelper->setSort('column', 'asc|desc');
-$olapHelper->setLimit(array(0, 10));
-```
-
 ### Methods
 ```php
-$olapHelper->getColumnsIndex();
-$olapHelper->getColumnsIndexCount();
-$olapHelper->getColumnsName();
-$olapHelper->getColumnsNameCount();
-$olapHelper->getColumns();
-$olapHelper->getColumnsCount();
-$olapHelper->getRowsCount();
+$olapHelper->getDataRows();
 $olapHelper->getDataColumn(column);
-$olapHelper->getData(columns);
+$olapHelper->getDataColumns(columns = false);
 ```
