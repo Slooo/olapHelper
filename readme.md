@@ -22,6 +22,8 @@ $olapHelper = new olapHelper($olap);
 ### Methods
 ```php
 $olapHelper->getDataRows();
+$olapHelper->getDataRows('unique'); - return an array unique columns
+$olapHelper->getDataRows(true); - return an array where the keys id
 $olapHelper->getDataColumn(column);
 $olapHelper->getDataColumns(columns = false);
 ```
