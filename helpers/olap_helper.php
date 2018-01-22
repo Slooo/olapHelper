@@ -6,8 +6,8 @@
  * @author     Robert Slooo
  * @mail       borisworking@gmail.com
  * @copyright LTD "EMSIS"
- * @version   2.0
- * @date 2017
+ * @version   2.4
+ * @date 2018
  */
 
 class olapParser {
@@ -27,7 +27,7 @@ class olapParser {
     private function axis()
     {
         $result = $this->result;
-        $axis = array(); $data = array();
+        $axis = array(); $data = array(); $properties = array();
 
         // определяем тип запроса
         if(array_key_exists('Axis0', $result[1]))
@@ -71,11 +71,33 @@ class olapParser {
         if(isset($axis['Temp_nameColumn']) && isset($axis['Temp_nameColumnValue']) && isset($axis['Temp_indexColumn'])) {
             $axis['Temp_nameColumnValue'] = array_chunk($axis['Temp_nameColumnValue'], count($axis['Temp_nameColumn']));
 
+            // 0. Присваеваем id TODO
+            foreach($axis['Temp_indexColumn'] as $k => $v) {
+                foreach($v as $ke => $va) {
+                    $temp = (array) $va;
+
+                    // поиск id у элемента
+                    preg_match_all("/\[([^\]]*)\]/", array_shift($temp), $elements);
+                    // вытаскиваем id
+                    $id = array_pop($elements[1]);
+
+                    // TODO пока только для нормальных запросов
+                    if(array_key_exists(1, $elements[1])) {
+                        // имя столбца - первые два уровня
+                        $column = $elements[1][0].'|'.$elements[1][1].'|'.$id;//implode('|', $elements[1]);
+
+                        $x = $this->hasNumber(array_shift($temp));
+                        $properties[$k][$column] = $x;
+                    }
+                }
+            }
+
             // 1. Выбираем неименованные столбцы
             array_walk($axis['Temp_indexColumn'], function(&$v){
                 $v = array_map(function(&$va){
                     $temp = (array) $va;
-                    return next($temp);
+                    $x = $this->hasNumber(next($temp));
+                    return $x;
                 },$v);
             });
 
@@ -96,14 +118,18 @@ class olapParser {
                 },$v);
             });
 
+
             // 3. Готовим финальный массив, 1-ый уровень строки, 2-ой имена столбцов
             foreach($axis['Temp_nameColumnValue'] as $k => $v) {
                 foreach($v as $ke => $va) {
-                    $axis['Temp_indexColumn'][$k][$axis['Temp_nameColumn'][$ke]] = array_shift($v);
+                    $x = $this->hasNumber(array_shift($v));
+                    $axis['Temp_indexColumn'][$k][$axis['Temp_nameColumn'][$ke]] = $x;
+                    $properties[$k][$axis['Temp_nameColumn'][$ke]] = $x;
                 }
             }
 
             $data['result'] = $axis['Temp_indexColumn'];
+            $data['properties'] = $properties;
         } else if(isset($axis['Temp_nameColumn']) && isset($axis['Temp_nameColumnValue']) && !isset($axis['Temp_indexColumn'])) {
             // Если только именованные столбцы
 
@@ -131,7 +157,8 @@ class olapParser {
             // 3. Готовим финальный массив, 1-ый уровень строки, 2-ой имена столбцов
             foreach($axis['Temp_nameColumnValue'] as $k => $v) {
                 foreach($v as $ke => $va) {
-                    $data['result'][$k][$axis['Temp_nameColumn'][$ke]] = array_shift($v);
+                    $x = $this->hasNumber(array_shift($v));
+                    $data['result'][$k][$axis['Temp_nameColumn'][$ke]] = $x;
                 }
             }
 
@@ -142,7 +169,8 @@ class olapParser {
             array_walk($axis['Temp_indexColumn'], function(&$v){
                 $v = array_map(function(&$va){
                     $temp = (array) $va;
-                    return next($va);
+                    $x = $this->hasNumber(next($temp));
+                    return $x;
                 },$v);
             });
 
@@ -190,7 +218,7 @@ class olapParser {
      */
     public function getDataColumns($column = false)
     {
-        $temp = $this->axis();
+    	$temp = $this->axis();
         if($temp['result']) {
             foreach($temp['result'] as $k => $v) {
                 foreach($v as $ke => $va) {
@@ -205,9 +233,45 @@ class olapParser {
     }
 
     // Выбираем данные построчно
-    public function getDataRows()
+    public function getDataRows($properties = false)
     {
-        return $this->axis()['result'];
+        // для уникальных столбцов
+        if($properties === 'unique') {
+            $temp = array();
+
+            foreach($this->axis()['result'] as $k => $v) {
+                foreach($v as $ke => $va) {
+                    if(strpos($ke, '|') !== false) {
+                        $exp = explode('|', $ke);
+
+                        // TODO только для числовых
+                        $exp = array_filter($exp, function(&$v) {
+                            if(is_numeric($v)) return $v;
+                        });
+
+                        // TODO условие
+                        if(count($exp) <= 2) {
+                            if($exp[0] === $exp[1]) {
+                                $x = array_shift($exp);
+                                $temp[$k][$x] = $va;
+                            }
+
+                        } else {
+                            if($exp[0] === $exp[1] && $exp[1] === $exp[2]) {
+                                $x = array_shift($exp);
+                                $temp[$k][$x] = $va;  
+                            }
+                        }
+                    } else if(strpos($ke, '|') === false){
+                        $temp[$k][$ke] = $va;
+                    }
+                }
+            }
+
+            return $temp;
+        } else {
+            return $properties ? $this->axis()['properties'] : $this->axis()['result'];            
+        }
     }
 
 }
@@ -306,4 +370,26 @@ class olapHelper extends olapParser {
     {
         return $this->dataColumn;
     }
+
+    protected function hasNumber($value) {
+        $search = strpos($value, ',');
+        if($search !== false) {
+            $temp = str_replace(',', '.', $value);
+            return is_numeric($temp) ? (float) $temp : $value;
+        } else if(is_integer($value)) {
+            return (int) $value;
+        } else {
+            if(is_numeric($value)) {
+                // число начинается с нуля
+                if($value[0] === '0' && strlen($value) > 1) {
+                    return $value;
+                } else {
+                    return (int) $value;
+                }
+            } else {
+                return $value;
+            }
+        }
+    }
+
 }
